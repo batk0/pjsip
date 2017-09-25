@@ -2382,6 +2382,14 @@ PJ_DECL(pj_status_t) pjsua_verify_sip_url(const char *url);
  */
 PJ_DECL(pj_status_t) pjsua_verify_url(const char *url);
 
+/**
+ * This is a utility function to verify that valid User-Agent string is given.
+ *
+ * @param user_agent    The User-Agent, as NULL terminated string.
+ *
+ * @return              PJ_SUCCESS on success, or the appropriate error code.
+ */
+PJ_DECL(pj_status_t) pjsua_verify_user_agent(const char *user_agent);
 
 /**
  * Schedule a timer entry. Note that the timer callback may be executed

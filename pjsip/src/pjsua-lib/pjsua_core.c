@@ -3003,6 +3003,30 @@ PJ_DEF(pj_status_t) pjsua_get_nat_type(pj_stun_nat_type *type)
 }
 
 /*
+ * Verify that valid User-Agent is given.
+ */
+PJ_DEF(pj_status_t) pjsua_verify_user_agent(const char *c_user_agent)
+{
+    int i;
+    pj_size_t len = (c_user_agent ? pj_ansi_strlen(c_user_agent) : 0);
+
+    if (!len || len >40) return PJSIP_EINVALIDUSERAGENT;
+    for(i=0;i<len;i++) {
+        if ((c_user_agent[i] < '0' || c_user_agent[i] > '9') &&
+        (c_user_agent[i] < 'a' || c_user_agent[i] > 'z') &&
+        (c_user_agent[i] < 'A' || c_user_agent[i] > 'Z') && 
+        c_user_agent[i] != '-' && c_user_agent[i] != '.' &&
+        c_user_agent[i] != '!' && c_user_agent[i] != '%' &&
+        c_user_agent[i] != '*' && c_user_agent[i] != '_' &&
+        c_user_agent[i] != '+' && c_user_agent[i] != '`' &&
+        c_user_agent[i] !=  39 && c_user_agent[i] != '~' &&
+        c_user_agent[i] != ' ') return PJSIP_EINVALIDUSERAGENT;
+    }
+    // TODO: add validation of User-Agent here
+    return 0;
+}
+
+/*
  * Verify that valid url is given.
  */
 PJ_DEF(pj_status_t) pjsua_verify_url(const char *c_url)

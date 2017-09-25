@@ -420,6 +420,11 @@ PJ_BEGIN_DECL
  * Not associated with REFER subscription
  */
 #define PJSIP_ENOREFERSESSION	 (PJSIP_ERRNO_START_PJSIP+122)	/* 171122 */
+/**
+ * @hideinitializer
+ * Invalud User-Agent header
+ */
+#define PJSIP_EINVALIDUSERAGENT	 (PJSIP_ERRNO_START_PJSIP+123)	/* 171123 */
 
 /************************************************************
  * INVITE SESSIONS ERRORS

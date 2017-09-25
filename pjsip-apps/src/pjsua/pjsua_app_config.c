@@ -207,6 +207,7 @@ static void usage(void)
     puts  ("  --accept-redirect=N Specify how to handle call redirect (3xx) response.");
     puts  ("                      0: reject, 1: follow automatically,");
     puts  ("                      2: follow + replace To header (default), 3: ask");
+    puts  ("  --user-agent str    Set User-Agent: header to str");
 
     puts  ("");
     puts  ("CLI options:");
@@ -377,7 +378,7 @@ static pj_status_t parse_args(int argc, char *argv[],
 	   OPT_TIMER, OPT_TIMER_SE, OPT_TIMER_MIN_SE,
 	   OPT_VIDEO, OPT_EXTRA_AUDIO,
 	   OPT_VCAPTURE_DEV, OPT_VRENDER_DEV, OPT_PLAY_AVI, OPT_AUTO_PLAY_AVI,
-	   OPT_USE_CLI, OPT_CLI_TELNET_PORT, OPT_DISABLE_CLI_CONSOLE
+	   OPT_USE_CLI, OPT_CLI_TELNET_PORT, OPT_DISABLE_CLI_CONSOLE, OPT_USER_AGENT
     };
     struct pj_getopt_option long_options[] = {
 	{ "config-file",1, 0, OPT_CONFIG_FILE},
@@ -509,6 +510,7 @@ static pj_status_t parse_args(int argc, char *argv[],
 	{ "use-cli",	0, 0, OPT_USE_CLI},
 	{ "cli-telnet-port", 1, 0, OPT_CLI_TELNET_PORT},
 	{ "no-cli-console", 0, 0, OPT_DISABLE_CLI_CONSOLE},
+        { "user-agent", 1, 0, OPT_USER_AGENT},
 	{ NULL, 0, 0, 0}
     };
     pj_status_t status;
@@ -1347,6 +1349,16 @@ static pj_status_t parse_args(int argc, char *argv[],
 
 	case OPT_DISABLE_CLI_CONSOLE:
 	    cfg->cli_cfg.cli_fe &= (~CLI_FE_CONSOLE);
+	    break;
+
+	case OPT_USER_AGENT:   /* User-Agent: */
+            if (pjsua_verify_user_agent(pj_optarg) != 0) {
+                PJ_LOG(1,(THIS_FILE,
+                          "Error: invalid User-Agent '%s' in "
+                          "--user-agent option", pj_optarg));
+                return -1;
+            }
+	    cfg->cfg.user_agent = pj_str(pj_optarg);
 	    break;
 
 	default:
