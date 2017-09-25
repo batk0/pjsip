@@ -384,6 +384,7 @@ pjmedia_codec_opus_set_default_param(const pjmedia_codec_opus_config *cfg,
 	return PJ_EINVAL;
     }
     param->info.clock_rate = opus_cfg.sample_rate = cfg->sample_rate;
+    param->info.max_bps = opus_cfg.sample_rate * 2;
 
     /* Set channel count */
     if (cfg->channel_cnt != 1 && cfg->channel_cnt != 2)
@@ -391,10 +392,13 @@ pjmedia_codec_opus_set_default_param(const pjmedia_codec_opus_config *cfg,
     param->info.channel_cnt = opus_cfg.channel_cnt = cfg->channel_cnt;
 
     /* Set bit_rate */
-    if (cfg->bit_rate < 6000 || cfg->bit_rate > 510000) {
+    if ((cfg->bit_rate != PJMEDIA_CODEC_OPUS_DEFAULT_BIT_RATE) && 
+       (cfg->bit_rate < 6000 || cfg->bit_rate > 510000)) 
+    {
 	return PJ_EINVAL;
     }
     opus_cfg.bit_rate = cfg->bit_rate;
+    param->info.avg_bps = opus_cfg.bit_rate;
 
     /* Set expected packet loss */
     if (cfg->packet_loss >= 100)
@@ -453,16 +457,15 @@ static pj_status_t factory_default_attr( pjmedia_codec_factory *factory,
 					 const pjmedia_codec_info *ci, 
 					 pjmedia_codec_param *attr )
 {
+    PJ_UNUSED_ARG(factory);
     TRACE_((THIS_FILE, "%s:%d: - TRACE", __FUNCTION__, __LINE__));
 
     pj_bzero(attr, sizeof(pjmedia_codec_param));
     attr->info.pt          	   = (pj_uint8_t)ci->pt;
     attr->info.clock_rate  	   = opus_cfg.sample_rate;
     attr->info.channel_cnt 	   = opus_cfg.channel_cnt;
-    attr->info.avg_bps     	   = (opus_cfg.bit_rate > 0) ?
-				     opus_cfg.bit_rate :
-    				     opus_cfg.sample_rate; // Estimate
-    attr->info.max_bps     	   = opus_cfg.bit_rate * 2;
+    attr->info.avg_bps     	   = opus_cfg.bit_rate;
+    attr->info.max_bps     	   = opus_cfg.sample_rate * 2;
     attr->info.frm_ptime   	   = 20;
     attr->setting.frm_per_pkt 	   = 1;
     attr->info.pcm_bits_per_sample = 16;
@@ -518,6 +521,7 @@ static pj_status_t factory_alloc_codec( pjmedia_codec_factory *factory,
     struct opus_data *opus_data;
     struct opus_codec_factory *f = (struct opus_codec_factory*) factory;
 
+    PJ_UNUSED_ARG(ci);
     TRACE_((THIS_FILE, "%s:%d: - TRACE", __FUNCTION__, __LINE__));
 
     pool = pjmedia_endpt_create_pool(f->endpt, "opus", 512, 512);
@@ -585,6 +589,7 @@ static pj_status_t  codec_open( pjmedia_codec *codec,
 {
     struct opus_data *opus_data = (struct opus_data *)codec->codec_data;
     int idx, err;
+    pj_bool_t auto_bit_rate = PJ_TRUE;
 
     PJ_ASSERT_RETURN(codec && attr && opus_data, PJ_EINVAL);
 
@@ -627,6 +632,7 @@ static pj_status_t  codec_open( pjmedia_codec *codec,
     idx = find_fmtp(&attr->setting.enc_fmtp, &STR_MAX_BIT_RATE, PJ_FALSE);
     if (idx >= 0) {
 	unsigned rate;
+	auto_bit_rate = PJ_FALSE;
 	rate = (unsigned)pj_strtoul(&attr->setting.enc_fmtp.param[idx].val);
 	if (rate < attr->info.avg_bps)
 	    attr->info.avg_bps = rate;
@@ -681,7 +687,9 @@ static pj_status_t  codec_open( pjmedia_codec *codec,
     /* Set signal type */
     opus_encoder_ctl(opus_data->enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_VOICE));
     /* Set bitrate */
-    opus_encoder_ctl(opus_data->enc, OPUS_SET_BITRATE(attr->info.avg_bps));
+    opus_encoder_ctl(opus_data->enc, OPUS_SET_BITRATE(auto_bit_rate?
+    						      OPUS_AUTO:
+    						      attr->info.avg_bps));
     /* Set VAD */
     opus_encoder_ctl(opus_data->enc, OPUS_SET_DTX(attr->setting.vad ? 1 : 0));
     /* Set PLC */
@@ -764,7 +772,9 @@ static pj_status_t  codec_modify( pjmedia_codec *codec,
 
     /* Set bitrate */
     opus_data->cfg.bit_rate = attr->info.avg_bps;
-    opus_encoder_ctl(opus_data->enc, OPUS_SET_BITRATE(attr->info.avg_bps));
+    opus_encoder_ctl(opus_data->enc, OPUS_SET_BITRATE(attr->info.avg_bps?
+    						      attr->info.avg_bps:
+    						      OPUS_AUTO));
     /* Set VAD */
     opus_encoder_ctl(opus_data->enc, OPUS_SET_DTX(attr->setting.vad ? 1 : 0));
     /* Set PLC */
@@ -923,6 +933,8 @@ static pj_status_t  codec_decode( pjmedia_codec *codec,
     pjmedia_frame *inframe;
     int fec = 0;
 
+    PJ_UNUSED_ARG(output_buf_len);
+
     pj_mutex_lock (opus_data->mutex);
 
     if (opus_data->dec_frame_index == -1) {
@@ -1010,13 +1022,14 @@ static pj_status_t  codec_recover( pjmedia_codec *codec,
     int decoded_samples;
     pjmedia_frame *inframe;
 
+    PJ_UNUSED_ARG(output_buf_len);
     pj_mutex_lock (opus_data->mutex);
 
     if (opus_data->dec_frame_index == -1) {
         /* Recover the first packet? Don't think so, fill it with zeroes. */
 	pj_uint16_t samples_per_frame;
-	samples_per_frame = (opus_data->cfg.sample_rate * 
-			     opus_data->ptime) / 1000;
+	samples_per_frame = (pj_uint16_t)(opus_data->cfg.sample_rate * 
+					  opus_data->ptime) / 1000;
 	output->type = PJMEDIA_FRAME_TYPE_AUDIO;
 	output->size = samples_per_frame << 1;
 	pjmedia_zero_samples((pj_int16_t*)output->buf, samples_per_frame);

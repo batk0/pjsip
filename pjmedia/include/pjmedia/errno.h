@@ -406,7 +406,11 @@ PJ_BEGIN_DECL
  * Invalid or bad format
  */
 #define PJMEDIA_EBADFMT             (PJMEDIA_ERRNO_START+108)    /* 220108 */
-
+/**
+ * @hideinitializer
+ * Unsupported media type.
+ */
+#define PJMEDIA_EUNSUPMEDIATYPE     (PJMEDIA_ERRNO_START+109)    /* 220109 */
 
 /************************************************************
  * RTP SESSION ERRORS
@@ -617,6 +621,24 @@ PJ_BEGIN_DECL
  * Secure transport required in SDP media descriptor.
  */
 #define PJMEDIA_SRTP_ESDPREQSECTP   (PJMEDIA_ERRNO_START+229)    /* 220229 */
+
+/**
+ * @hideinitializer
+ * No matching SRTP crypto-suite after DTLS nego.
+ */
+#define PJMEDIA_SRTP_DTLS_ENOCRYPTO (PJMEDIA_ERRNO_START+240)    /* 220240 */
+
+/**
+ * @hideinitializer
+ * No certificate supplied by peer in DTLS nego.
+ */
+#define PJMEDIA_SRTP_DTLS_EPEERNOCERT (PJMEDIA_ERRNO_START+241)  /* 220241 */
+
+/**
+ * @hideinitializer
+ * Fingerprint from signalling not match to actual fingerprint.
+ */
+#define PJMEDIA_SRTP_DTLS_EFPNOTMATCH (PJMEDIA_ERRNO_START+242)  /* 220242 */
 
 #endif /* PJMEDIA_HAS_SRTP */
 

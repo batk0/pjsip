@@ -117,6 +117,7 @@ static const struct
     PJ_BUILD_ERR( PJMEDIA_RTP_EINDTMF,	    "Invalid DTMF digit" ),
     PJ_BUILD_ERR( PJMEDIA_RTP_EREMNORFC2833,"Remote does not support RFC 2833" ),
     PJ_BUILD_ERR( PJMEDIA_EBADFMT,	    "Bad format"),
+    PJ_BUILD_ERR( PJMEDIA_EUNSUPMEDIATYPE,  "Unsupported media type"),
 
     /* RTP session errors. */
     PJ_BUILD_ERR( PJMEDIA_RTP_EINPKT,	    "Invalid RTP packet" ),
@@ -164,7 +165,10 @@ static const struct
     PJ_BUILD_ERR( PJMEDIA_SRTP_ESDPINCRYPTOTAG, "Invalid SRTP crypto tag" ),
     PJ_BUILD_ERR( PJMEDIA_SRTP_ESDPINTRANSPORT, "Invalid SDP media transport for SRTP" ),
     PJ_BUILD_ERR( PJMEDIA_SRTP_ESDPREQCRYPTO,   "SRTP crypto attribute required" ),
-    PJ_BUILD_ERR( PJMEDIA_SRTP_ESDPREQSECTP,    "Secure transport required in SDP media descriptor" )
+    PJ_BUILD_ERR( PJMEDIA_SRTP_ESDPREQSECTP,    "Secure transport required in SDP media descriptor" ),
+    PJ_BUILD_ERR( PJMEDIA_SRTP_DTLS_ENOCRYPTO,  "No matching SRTP crypto-suite after DTLS nego" ),
+    PJ_BUILD_ERR( PJMEDIA_SRTP_DTLS_EPEERNOCERT,"No certificate supplied by peer in DTLS nego" ),
+    PJ_BUILD_ERR( PJMEDIA_SRTP_DTLS_EFPNOTMATCH,"Fingerprint from signalling not match to actual fingerprint" )
 #endif
 
 };

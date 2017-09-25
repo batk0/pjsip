@@ -63,6 +63,9 @@ class MyObserver implements MyAppObserver {
 	
 	@Override
 	public void notifyBuddyState(MyBuddy buddy) {}	
+
+	@Override
+	public void notifyChangeNetwork() {}
 }
 
 class MyShutdownHook extends Thread {
@@ -84,8 +87,21 @@ public class sample {
 	private static MyApp app = new MyApp();
 	private static MyAppObserver observer = new MyObserver();
 	private static MyAccount account = null;
-	private static AccountConfig accCfg = null;			
-	
+	private static AccountConfig accCfg = null;		
+
+        // Snippet code to set native window to output video 
+        /*
+        private void setOutputVidWin() {}
+                VideoWindowHandle vidWH = new VideoWindowHandle();	
+                vidWH.getHandle().setWindow(getNativeWindow());
+                try {
+                        currentCall.vidWin.setWindow(vidWH);			
+                } catch (Exception e) {                        
+                        System.out.println(e);
+                }        
+        }
+        */
+
 	private static void runWorker() {
 		try {					
 			app.init(observer, ".", true);

@@ -1122,6 +1122,16 @@ PJ_INLINE(pjsip_cfg_t*) pjsip_cfg(void)
 #   define PJSIP_REGISTER_CLIENT_ADD_XUID_PARAM	0
 #endif
 
+/**
+ * Maximum size of pool allowed for auth client session in pjsip_regc.
+ * After the size exceeds because of Digest authentication processing,
+ * the pool is reset.
+ *
+ * Default is 20 kB
+ */
+#ifndef PJSIP_AUTH_CACHED_POOL_MAX_SIZE
+#   define PJSIP_AUTH_CACHED_POOL_MAX_SIZE	(20 * 1024)
+#endif
 
 /*****************************************************************************
  *  SIP Event framework and presence settings.
@@ -1228,6 +1238,18 @@ PJ_INLINE(pjsip_cfg_t*) pjsip_cfg(void)
  */
 #ifndef PJSIP_SESS_TIMER_DEF_SE
 #   define PJSIP_SESS_TIMER_DEF_SE		1800
+#endif
+
+
+/**
+ * Default delay for retrying session refresh request upon
+ * receiving transport error (503). Set it to -1 to end the session
+ * immediately instead.
+ *
+ * Default: 10 seconds
+ */
+#ifndef PJSIP_SESS_TIMER_RETRY_DELAY
+#   define PJSIP_SESS_TIMER_RETRY_DELAY		10
 #endif
 
 

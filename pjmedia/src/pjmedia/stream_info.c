@@ -419,7 +419,7 @@ PJ_DEF(pj_status_t) pjmedia_stream_info_from_sdp(
 
 	si->proto = PJMEDIA_TP_PROTO_RTP_AVP;
 
-    } else if (pj_stricmp(&local_m->desc.transport, &ID_RTP_SAVP) == 0) {
+    } else if (pj_stristr(&local_m->desc.transport, &ID_RTP_SAVP)) {
 
 	si->proto = PJMEDIA_TP_PROTO_RTP_SAVP;
 
@@ -476,9 +476,17 @@ PJ_DEF(pj_status_t) pjmedia_stream_info_from_sdp(
 	return PJMEDIA_EINVALIDIP;
     }
 
-    /* Local and remote address family must match */
-    if (local_af != rem_af)
-	return PJ_EAFNOTSUP;
+    /* Local and remote address family must match, except when ICE is used
+     * by both sides (see also ticket #1952).
+     */
+    if (local_af != rem_af) {
+	const pj_str_t STR_ICE_CAND = { "candidate", 9 };
+	if (pjmedia_sdp_media_find_attr(rem_m, &STR_ICE_CAND, NULL)==NULL ||
+	    pjmedia_sdp_media_find_attr(local_m, &STR_ICE_CAND, NULL)==NULL)
+	{
+	    return PJ_EAFNOTSUP;
+	}
+    }
 
     /* Media direction: */
 

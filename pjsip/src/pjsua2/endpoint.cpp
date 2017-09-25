@@ -44,6 +44,111 @@ Endpoint *Endpoint::instance_;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+TlsInfo::TlsInfo()
+	: empty(true)
+{
+}
+
+bool TlsInfo::isEmpty() const
+{
+    return empty;
+}
+
+void TlsInfo::fromPj(const pjsip_tls_state_info &info)
+{
+#if defined(PJ_HAS_SSL_SOCK) && PJ_HAS_SSL_SOCK != 0
+    pj_ssl_sock_info *ssock_info = info.ssl_sock_info;
+    char straddr[PJ_INET6_ADDRSTRLEN+10];
+    const char *verif_msgs[32];
+    unsigned verif_msg_cnt;
+    
+    empty	= false;
+    established = PJ2BOOL(ssock_info->established);
+    protocol 	= ssock_info->proto;
+    cipher 	= ssock_info->cipher;
+    cipherName	= pj_ssl_cipher_name(ssock_info->cipher);
+    pj_sockaddr_print(&ssock_info->local_addr, straddr, sizeof(straddr), 3);
+    localAddr 	= straddr;
+    pj_sockaddr_print(&ssock_info->remote_addr, straddr, sizeof(straddr),3);
+    remoteAddr 	= straddr;
+    verifyStatus = ssock_info->verify_status;
+    if (ssock_info->local_cert_info)
+        localCertInfo.fromPj(*ssock_info->local_cert_info);
+    if (ssock_info->remote_cert_info)
+        remoteCertInfo.fromPj(*ssock_info->remote_cert_info);
+    
+    /* Dump server TLS certificate verification result */
+    verif_msg_cnt = PJ_ARRAY_SIZE(verif_msgs);
+    pj_ssl_cert_get_verify_status_strings(ssock_info->verify_status,
+    				      	  verif_msgs, &verif_msg_cnt);
+    for (unsigned i = 0; i < verif_msg_cnt; ++i) {
+        verifyMsgs.push_back(verif_msgs[i]);
+    }
+#else
+    PJ_UNUSED_ARG(info);
+#endif
+}
+
+SslCertInfo::SslCertInfo()
+	: empty(true)
+{
+}
+
+bool SslCertInfo::isEmpty() const
+{
+    return empty;
+}
+
+void SslCertInfo::fromPj(const pj_ssl_cert_info &info)
+{
+    empty 	= false;
+    version 	= info.version;
+    pj_memcpy(serialNo, info.serial_no, sizeof(info.serial_no));
+    subjectCn 	= pj2Str(info.subject.cn);
+    subjectInfo = pj2Str(info.subject.info);
+    issuerCn 	= pj2Str(info.issuer.cn);
+    issuerInfo 	= pj2Str(info.issuer.info);
+    validityStart.fromPj(info.validity.start);
+    validityEnd.fromPj(info.validity.end);
+    validityGmt = PJ2BOOL(info.validity.gmt);
+    raw 	= pj2Str(info.raw);
+
+    for (unsigned i = 0; i < info.subj_alt_name.cnt; i++) {
+    	SslCertName cname;
+    	cname.type = info.subj_alt_name.entry[i].type;
+    	cname.name = pj2Str(info.subj_alt_name.entry[i].name);
+    	subjectAltName.push_back(cname);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+IpChangeParam::IpChangeParam()
+{
+    pjsua_ip_change_param param;    
+    pjsua_ip_change_param_default(&param);
+    fromPj(param);
+}
+
+
+pjsua_ip_change_param IpChangeParam::toPj() const
+{
+    pjsua_ip_change_param param;
+    pjsua_ip_change_param_default(&param);
+
+    param.restart_listener = restartListener;
+    param.restart_lis_delay = restartLisDelay;
+
+    return param;
+}
+
+
+void IpChangeParam::fromPj(const pjsua_ip_change_param &param)
+{
+    restartListener = PJ2BOOL(param.restart_listener);
+    restartLisDelay = param.restart_lis_delay;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 UaConfig::UaConfig()
 : mainThreadOnly(false)
 {
@@ -69,6 +174,7 @@ void UaConfig::fromPj(const pjsua_config &ua_cfg)
 	this->stunServer.push_back(pj2Str(ua_cfg.stun_srv[i]));
     }
 
+    this->stunTryIpv6 = PJ2BOOL(ua_cfg.stun_try_ipv6);
     this->stunIgnoreFailure = PJ2BOOL(ua_cfg.stun_ignore_failure);
     this->natTypeInSdp = ua_cfg.nat_type_in_sdp;
     this->mwiUnsolicitedEnabled = PJ2BOOL(ua_cfg.enable_unsolicited_mwi);
@@ -115,6 +221,7 @@ void UaConfig::readObject(const ContainerNode &node) throw(Error)
     NODE_READ_STRINGV ( this_node, nameserver);
     NODE_READ_STRING  ( this_node, userAgent);
     NODE_READ_STRINGV ( this_node, stunServer);
+    NODE_READ_BOOL    ( this_node, stunTryIpv6);
     NODE_READ_BOOL    ( this_node, stunIgnoreFailure);
     NODE_READ_INT     ( this_node, natTypeInSdp);
     NODE_READ_BOOL    ( this_node, mwiUnsolicitedEnabled);
@@ -130,6 +237,7 @@ void UaConfig::writeObject(ContainerNode &node) const throw(Error)
     NODE_WRITE_STRINGV ( this_node, nameserver);
     NODE_WRITE_STRING  ( this_node, userAgent);
     NODE_WRITE_STRINGV ( this_node, stunServer);
+    NODE_WRITE_BOOL    ( this_node, stunTryIpv6);
     NODE_WRITE_BOOL    ( this_node, stunIgnoreFailure);
     NODE_WRITE_INT     ( this_node, natTypeInSdp);
     NODE_WRITE_BOOL    ( this_node, mwiUnsolicitedEnabled);
@@ -490,7 +598,7 @@ void Endpoint::logFunc(int level, const char *data, int len)
     LogEntry entry;
     entry.level = level;
     entry.msg = string(data, len);
-    entry.threadId = (long)pj_thread_this();
+    entry.threadId = (long)(size_t)pj_thread_this();
     entry.threadName = string(pj_thread_get_name(pj_thread_this()));
 
     ep.utilLogWrite(entry);
@@ -558,8 +666,19 @@ void Endpoint::on_transport_state( pjsip_transport *tp,
     OnTransportStateParam prm;
 
     prm.hnd = (TransportHandle)tp;
+    prm.type = tp->type_name;
     prm.state = state;
     prm.lastError = info ? info->status : PJ_SUCCESS;
+
+#if defined(PJSIP_HAS_TLS_TRANSPORT) && PJSIP_HAS_TLS_TRANSPORT!=0
+    if (!pj_ansi_stricmp(tp->type_name, "tls") && info->ext_info &&
+	(state == PJSIP_TP_STATE_CONNECTED || 
+	 ((pjsip_tls_state_info*)info->ext_info)->
+			         ssl_sock_info->verify_status != PJ_SUCCESS))
+    {
+    	prm.tlsInfo.fromPj(*((pjsip_tls_state_info*)info->ext_info));
+    }
+#endif
 
     ep.onTransportState(prm);
 }
@@ -602,12 +721,25 @@ void Endpoint::on_incoming_call(pjsua_acc_id acc_id, pjsua_call_id call_id,
 	return;
     }
 
+    pjsua_call *call = &pjsua_var.calls[call_id];
+    if (!call->incoming_data) {
+	/* This happens when the incoming call callback has been called from 
+	 * inside the on_create_media_transport() callback. So we simply 
+	 * return here to avoid calling	the callback twice. 
+	 */
+	return;
+    }
+
     /* call callback */
     OnIncomingCallParam prm;
     prm.callId = call_id;
     prm.rdata.fromPj(*rdata);
 
     acc->onIncomingCall(prm);
+
+    /* Free cloned rdata. */
+    pjsip_rx_data_free_cloned(call->incoming_data);
+    call->incoming_data = NULL;
 
     /* disconnect if callback doesn't handle the call */
     pjsua_call_info ci;
@@ -816,6 +948,20 @@ void Endpoint::on_mwi_info(pjsua_acc_id acc_id,
     acc->onMwiInfo(prm);
 }
 
+void Endpoint::on_acc_find_for_incoming(const pjsip_rx_data *rdata,
+				        pjsua_acc_id* acc_id)
+{
+    OnSelectAccountParam prm;
+
+    pj_assert(rdata && acc_id);
+    prm.rdata.fromPj(*((pjsip_rx_data *)rdata));
+    prm.accountIndex = *acc_id;
+    
+    instance_->onSelectAccount(prm);
+    
+    *acc_id = prm.accountIndex;
+}
+
 void Endpoint::on_buddy_state(pjsua_buddy_id buddy_id)
 {
     Buddy *buddy = (Buddy*)pjsua_buddy_get_user_data(buddy_id);
@@ -897,7 +1043,7 @@ void Endpoint::on_call_sdp_created(pjsua_call_id call_id,
         pjmedia_sdp_session *new_sdp;
         pj_str_t dup_new_sdp;
         pj_str_t new_sdp_str = {(char*)prm.sdp.wholeSdp.c_str(),
-        			prm.sdp.wholeSdp.size()};
+        			(pj_ssize_t)prm.sdp.wholeSdp.size()};
 
         pj_strdup(pool, &dup_new_sdp, &new_sdp_str);        
         pjmedia_sdp_parse(pool, dup_new_sdp.ptr,
@@ -1211,7 +1357,22 @@ Endpoint::on_create_media_transport(pjsua_call_id call_id,
 {
     Call *call = Call::lookup(call_id);
     if (!call) {
-	return base_tp;
+	pjsua_call *in_call = &pjsua_var.calls[call_id];
+	if (in_call->incoming_data) {
+	    /* This can happen when there is an incoming call but the
+	     * on_incoming_call() callback hasn't been called. So we need to 
+	     * call the callback here.
+	     */
+	    on_incoming_call(in_call->acc_id, call_id, in_call->incoming_data);
+
+	    /* New call should already be created by app. */
+	    call = Call::lookup(call_id);
+	    if (!call) {
+		return base_tp;
+	    }
+	} else {
+	    return base_tp;
+	}
     }
     
     OnCreateMediaTransportParam prm;
@@ -1222,6 +1383,90 @@ Endpoint::on_create_media_transport(pjsua_call_id call_id,
     call->onCreateMediaTransport(prm);
     
     return (pjmedia_transport *)prm.mediaTp;
+}
+
+void Endpoint::on_create_media_transport_srtp(pjsua_call_id call_id,
+                                    	      unsigned media_idx,
+                                    	      pjmedia_srtp_setting *srtp_opt)
+{
+    Call *call = Call::lookup(call_id);
+    if (!call) {
+	pjsua_call *in_call = &pjsua_var.calls[call_id];
+	if (in_call->incoming_data) {
+	    /* This can happen when there is an incoming call but the
+	     * on_incoming_call() callback hasn't been called. So we need to 
+	     * call the callback here.
+	     */
+	    on_incoming_call(in_call->acc_id, call_id, in_call->incoming_data);
+
+	    /* New call should already be created by app. */
+	    call = Call::lookup(call_id);
+	    if (!call) {
+		return;
+	    }
+	} else {
+	    return;
+	}
+    }
+    
+    OnCreateMediaTransportSrtpParam prm;
+    prm.mediaIdx = media_idx;
+    prm.srtpUse  = srtp_opt->use;
+    for (unsigned i = 0; i < srtp_opt->crypto_count; i++) {
+    	SrtpCrypto crypto;
+    	
+    	crypto.key   = pj2Str(srtp_opt->crypto[i].key);
+    	crypto.name  = pj2Str(srtp_opt->crypto[i].name);
+    	crypto.flags = srtp_opt->crypto[i].flags;
+    	prm.cryptos.push_back(crypto);
+    }
+    
+    call->onCreateMediaTransportSrtp(prm);
+    
+    srtp_opt->use = prm.srtpUse;
+    srtp_opt->crypto_count = (unsigned)prm.cryptos.size();
+    for (unsigned i = 0; i < srtp_opt->crypto_count; i++) {
+    	srtp_opt->crypto[i].key   = str2Pj(prm.cryptos[i].key);
+    	srtp_opt->crypto[i].name  = str2Pj(prm.cryptos[i].name);
+    	srtp_opt->crypto[i].flags = prm.cryptos[i].flags;
+    }
+}
+
+void Endpoint::on_ip_change_progress(pjsua_ip_change_op op,
+				     pj_status_t status,
+				     const pjsua_ip_change_op_info *info)
+{
+    Endpoint &ep = Endpoint::instance();
+    OnIpChangeProgressParam param;
+
+    param.op = op;
+    param.status = status;
+    switch (op) {
+    case PJSUA_IP_CHANGE_OP_RESTART_LIS:		
+	param.transportId = info->lis_restart.transport_id;	
+	break;
+    case PJSUA_IP_CHANGE_OP_ACC_SHUTDOWN_TP:
+	param.accId = info->acc_shutdown_tp.acc_id;
+	break;
+    case PJSUA_IP_CHANGE_OP_ACC_UPDATE_CONTACT:	
+	param.accId = info->acc_update_contact.acc_id;	
+	param.regInfo.code = info->acc_update_contact.code;
+	param.regInfo.isRegister = 
+				 PJ2BOOL(info->acc_update_contact.is_register);
+	break;
+    case PJSUA_IP_CHANGE_OP_ACC_HANGUP_CALLS:
+	param.accId = info->acc_hangup_calls.acc_id;
+	param.callId = info->acc_hangup_calls.call_id;
+	break;
+    case PJSUA_IP_CHANGE_OP_ACC_REINVITE_CALLS:
+	param.accId = info->acc_reinvite_calls.acc_id;
+	param.callId = info->acc_reinvite_calls.call_id;
+	break;
+    default:
+        param.accId = PJSUA_INVALID_ID;
+        break;
+    }
+    ep.onIpChangeProgress(param);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1285,6 +1530,8 @@ void Endpoint::libInit(const EpConfig &prmEpConfig) throw(Error)
     ua_cfg.cb.on_typing2	= &Endpoint::on_typing2;
     ua_cfg.cb.on_mwi_info	= &Endpoint::on_mwi_info;
     ua_cfg.cb.on_buddy_state	= &Endpoint::on_buddy_state;
+    ua_cfg.cb.on_acc_find_for_incoming  = &Endpoint::on_acc_find_for_incoming;
+    ua_cfg.cb.on_ip_change_progress	= &Endpoint::on_ip_change_progress;
 
     /* Call callbacks */
     ua_cfg.cb.on_call_state             = &Endpoint::on_call_state;
@@ -1518,6 +1765,21 @@ pj_stun_nat_type Endpoint::natGetType() throw(Error)
     return type;
 }
 
+void Endpoint::natUpdateStunServers(const StringVector &servers,
+				    bool wait) throw(Error)
+{
+    pj_str_t srv[MAX_STUN_SERVERS];
+    unsigned i, count = 0;
+
+    for (i=0; i<servers.size() && i<MAX_STUN_SERVERS; ++i) {
+	srv[count].ptr = (char*)servers[i].c_str();
+	srv[count].slen = servers[i].size();
+	++count;
+    }
+
+    PJSUA2_CHECK_EXPR(pjsua_update_stun_servers(count, srv, wait) );
+}
+
 void Endpoint::natCheckStunServers(const StringVector &servers,
 				   bool wait,
 				   Token token) throw(Error)
@@ -1587,6 +1849,11 @@ void Endpoint::transportSetEnable(TransportId id, bool enabled) throw(Error)
 void Endpoint::transportClose(TransportId id) throw(Error)
 {
     PJSUA2_CHECK_EXPR( pjsua_transport_close(id, PJ_FALSE) );
+}
+
+void Endpoint::transportShutdown(TransportHandle tp) throw(Error)
+{
+    PJSUA2_CHECK_EXPR( pjsip_transport_shutdown((pjsip_transport *)tp) );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1679,21 +1946,23 @@ void Endpoint::codecSetPriority(const string &codec_id,
 
 CodecParam Endpoint::codecGetParam(const string &codec_id) const throw(Error)
 {
-    pjmedia_codec_param *pj_param = NULL;
+    CodecParam param;
+    pjmedia_codec_param pj_param;
     pj_str_t codec_str = str2Pj(codec_id);
 
-    PJSUA2_CHECK_EXPR( pjsua_codec_get_param(&codec_str, pj_param) );
+    PJSUA2_CHECK_EXPR( pjsua_codec_get_param(&codec_str, &pj_param) );
 
-    return pj_param;
+    param.fromPj(pj_param);
+    return param;
 }
 
 void Endpoint::codecSetParam(const string &codec_id,
 			     const CodecParam param) throw(Error)
 {
     pj_str_t codec_str = str2Pj(codec_id);
-    pjmedia_codec_param *pj_param = (pjmedia_codec_param*)param;
+    pjmedia_codec_param pj_param = param.toPj();
 
-    PJSUA2_CHECK_EXPR( pjsua_codec_set_param(&codec_str, pj_param) );
+    PJSUA2_CHECK_EXPR( pjsua_codec_set_param(&codec_str, &pj_param) );
 }
 
 void Endpoint::clearCodecInfoList(CodecInfoVector &codec_list)
@@ -1782,4 +2051,10 @@ void Endpoint::resetVideoCodecParam(const string &codec_id) throw(Error)
 #else
     PJ_UNUSED_ARG(codec_id);    
 #endif	
+}
+
+void Endpoint::handleIpChange(const IpChangeParam &param) throw(Error)
+{
+    pjsua_ip_change_param ip_change_param = param.toPj();
+    PJSUA2_CHECK_EXPR(pjsua_handle_ip_change(&ip_change_param));
 }

@@ -209,11 +209,12 @@ PJ_DEF(pj_status_t) webrtc_aec_create(pj_pool_t *pool,
         }
     }
 
-    PJ_LOG(3, (THIS_FILE, "WebRTC AEC%s successfully created with options %d",
 #if PJMEDIA_WEBRTC_AEC_USE_MOBILE
-			  " mobile", options));
+    PJ_LOG(3, (THIS_FILE, "WebRTC AEC mobile successfully created with "
+			  "options %d", options));
 #else
-			  "", options));
+    PJ_LOG(3, (THIS_FILE, "WebRTC AEC successfully created with "
+			  "options %d", options));
 #endif
 
     /* Done */
@@ -282,6 +283,9 @@ PJ_DEF(pj_status_t) webrtc_aec_cancel_echo( void *state,
     const sample * buf_ptr;
     sample * out_buf_ptr;
 
+    PJ_UNUSED_ARG(options);
+    PJ_UNUSED_ARG(reserved);
+
     /* Sanity checks */
     PJ_ASSERT_RETURN(echo && rec_frm && play_frm, PJ_EINVAL);
     
@@ -327,7 +331,7 @@ PJ_DEF(pj_status_t) webrtc_aec_cancel_echo( void *state,
 #else
         status = WebRtcAec_Process(echo->AEC_inst, &buf_ptr,
                                    echo->channel_count, &out_buf_ptr,
-                                   echo->subframe_len, echo->tail, 0);
+                                   echo->subframe_len, (int16_t)echo->tail, 0);
 #endif
         if (status != 0) {
             print_webrtc_aec_error("Process echo", echo->AEC_inst);

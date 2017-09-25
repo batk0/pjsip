@@ -52,9 +52,9 @@ int my_atoi(const char *cs)
 	return 0 - (int)pj_strtoul(&s);
     } else if (cs[0] == '+') {
 	s.ptr++, s.slen--;
-	return pj_strtoul(&s);
+	return (int)pj_strtoul(&s);
     } else {
-	return pj_strtoul(&s);
+	return (int)pj_strtoul(&s);
     }
 }
 
@@ -290,7 +290,7 @@ void vid_print_dev(int id, const pjmedia_vid_dev_info *vdi, const char *title)
 	if (vdi->caps & (1 << i)) {
 	    const char *capname = pjmedia_vid_dev_cap_name(1 << i, NULL);
 	    if (capname) {
-		int tmp_len = strlen(capname);
+		int tmp_len = (int)strlen(capname);
 		if ((int)sizeof(capnames) - st_len <= tmp_len)
 		    break;
 
@@ -308,7 +308,7 @@ void vid_print_dev(int id, const pjmedia_vid_dev_info *vdi, const char *title)
 	const pjmedia_video_format_info *vfi =
 		pjmedia_get_video_format_info(NULL, vdi->fmt[i].id);
 	if (vfi) {
-	    int tmp_len = strlen(vfi->name);
+	    int tmp_len = (int)strlen(vfi->name);
 	    if ((int)sizeof(formats) - st_len <= tmp_len) {
 		st_len = -1;
 		break;

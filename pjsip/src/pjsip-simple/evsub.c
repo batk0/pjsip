@@ -412,7 +412,9 @@ PJ_DEF(pj_status_t) pjsip_evsub_register_pkg( pjsip_module *pkg_mod,
     unsigned i;
 
     PJ_ASSERT_RETURN(pkg_mod && event_name, PJ_EINVAL);
-    PJ_ASSERT_RETURN(accept_cnt < PJ_ARRAY_SIZE(pkg->pkg_accept->values), 
+    
+    /* Make sure accept_cnt < PJ_ARRAY_SIZE(pkg->pkg_accept->values) */
+    PJ_ASSERT_RETURN(accept_cnt <= PJSIP_GENERIC_ARRAY_MAX_COUNT, 
 		     PJ_ETOOMANY);
 
     /* Make sure evsub module has been initialized */
@@ -507,10 +509,9 @@ static void set_timer( pjsip_evsub *sub, int timer_id,
 	sub->timer.id = TIMER_TYPE_NONE;
     }
 
-    if (timer_id != TIMER_TYPE_NONE) {
+    if (timer_id != TIMER_TYPE_NONE && seconds > 0) {
 	pj_time_val timeout;
 
-	PJ_ASSERT_ON_FAIL(seconds > 0, return);
 	PJ_ASSERT_ON_FAIL(timer_id>TIMER_TYPE_NONE && timer_id<TIMER_TYPE_MAX,
 			  return);
 
@@ -524,6 +525,15 @@ static void set_timer( pjsip_evsub *sub, int timer_id,
 	PJ_LOG(5,(sub->obj_name, "Timer %s scheduled in %d seconds", 
 		  timer_names[sub->timer.id], timeout.sec));
     }
+}
+
+
+/*
+ * Set event subscription UAS timout.
+ */
+PJ_DEF(void) pjsip_evsub_uas_set_timeout(pjsip_evsub *sub, pj_uint32_t seconds)
+{
+    set_timer(sub, TIMER_TYPE_UAS_TIMEOUT, (pj_int32_t)seconds);
 }
 
 
@@ -831,7 +841,21 @@ static pj_status_t evsub_create( pjsip_dialog *dlg,
     return PJ_SUCCESS;
 }
 
+/*
+ * Increment the event subscription's group lock.
+ */
+PJ_DEF(pj_status_t) pjsip_evsub_add_ref(pjsip_evsub *sub)
+{
+    return pj_grp_lock_add_ref(sub->grp_lock);
+}
 
+/*
+ * Decrement the event subscription's group lock.
+ */
+PJ_DEF(pj_status_t) pjsip_evsub_dec_ref(pjsip_evsub *sub)
+{
+    return pj_grp_lock_dec_ref(sub->grp_lock);
+}
 
 /*
  * Create client subscription session.

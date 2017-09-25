@@ -847,7 +847,7 @@ static int sip_worker_thread(void *arg)
 /* Init application options */
 static pj_status_t init_options(int argc, char *argv[])
 {
-    static char ip_addr[32];
+    static char ip_addr[PJ_INET_ADDRSTRLEN];
     static char local_uri[64];
 
     enum { OPT_START,
@@ -888,12 +888,11 @@ static pj_status_t init_options(int argc, char *argv[])
     {
 	const pj_str_t *hostname;
 	pj_sockaddr_in tmp_addr;
-	char *addr;
 
 	hostname = pj_gethostname();
 	pj_sockaddr_in_init(&tmp_addr, hostname, 0);
-	addr = pj_inet_ntoa(tmp_addr.sin_addr);
-	pj_ansi_strcpy(ip_addr, addr);
+	pj_inet_ntop(pj_AF_INET(), &tmp_addr.sin_addr, ip_addr,
+        	     sizeof(ip_addr));
     }
 
     /* Init defaults */
@@ -1398,14 +1397,12 @@ static void call_on_media_update( pjsip_inv_session *inv,
 				  pj_status_t status)
 {
     struct call *call;
-    pj_pool_t *pool;
     struct media_stream *audio;
     const pjmedia_sdp_session *local_sdp, *remote_sdp;
     struct codec *codec_desc = NULL;
     unsigned i;
 
     call = inv->mod_data[mod_siprtp.id];
-    pool = inv->dlg->pool;
     audio = &call->media[0];
 
     /* If this is a mid-call media update, then destroy existing media */

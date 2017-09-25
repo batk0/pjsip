@@ -1664,12 +1664,9 @@ static pj_status_t app_init()
 
 	if (app_config.udp_cfg.port == 0) {
 	    pjsua_transport_info ti;
-	    pj_sockaddr_in *a;
 
 	    pjsua_transport_get_info(transport_id, &ti);
-	    a = (pj_sockaddr_in*)&ti.local_addr;
-
-	    tcp_cfg.port = pj_ntohs(a->sin_port);
+	    tcp_cfg.port = pj_sockaddr_get_port(&ti.local_addr);
 	}
     }
 
@@ -2013,10 +2010,7 @@ static pj_status_t app_destroy()
 	pjsua_conf_remove_port(app_config.tone_slots[i]);
     }
 
-    if (app_config.pool) {
-	pj_pool_release(app_config.pool);
-	app_config.pool = NULL;
-    }
+    pj_pool_safe_release(&app_config.pool);
 
     status = pjsua_destroy();
 

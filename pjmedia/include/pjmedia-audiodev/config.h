@@ -78,7 +78,7 @@ PJ_BEGIN_DECL
  * included.
  */
 #ifndef PJMEDIA_AUDIO_DEV_HAS_ANDROID_JNI
-#   define PJMEDIA_AUDIO_DEV_HAS_ANDROID_JNI    0
+#   define PJMEDIA_AUDIO_DEV_HAS_ANDROID_JNI    PJ_ANDROID
 #endif
 
 /**
@@ -113,15 +113,34 @@ PJ_BEGIN_DECL
 #endif
 
 
-/**
- * This setting controls whether WMME support should be included.
- */
+ /**
+  * This setting controls whether WMME support should be included.
+  */
 #ifndef PJMEDIA_AUDIO_DEV_HAS_WMME
-#   define PJMEDIA_AUDIO_DEV_HAS_WMME		1
+#  if (defined(PJ_WIN32_UWP) && PJ_WIN32_UWP!=0) || \
+      (defined(PJ_WIN32_WINPHONE8) && PJ_WIN32_WINPHONE8!=0)
+#    define PJMEDIA_AUDIO_DEV_HAS_WMME		0
+#  else
+#    define PJMEDIA_AUDIO_DEV_HAS_WMME		1
+#  endif
 #endif
 
- 
-/**
+
+ /**
+  * This setting controls whether Windows Audio Session API (WASAPI)
+  * support should be included.
+  */
+#ifndef PJMEDIA_AUDIO_DEV_HAS_WASAPI
+#  if (defined(PJ_WIN32_UWP) && PJ_WIN32_UWP!=0) || \
+      (defined(PJ_WIN32_WINPHONE8) && PJ_WIN32_WINPHONE8!=0)
+#    define PJMEDIA_AUDIO_DEV_HAS_WASAPI	1
+#  else
+#    define PJMEDIA_AUDIO_DEV_HAS_WASAPI	0
+#  endif
+#endif
+
+
+ /**
  * This setting controls whether BDIMAD support should be included.
  */
 #ifndef PJMEDIA_AUDIO_DEV_HAS_BDIMAD
